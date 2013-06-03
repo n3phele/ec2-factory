@@ -1188,6 +1188,7 @@ public class VirtualServerResource {
 	}
 
 	private boolean checkKey(String key, String id, String secret, URI location) {
+		//TODO: implement with JCloud
 		AmazonEC2Client client = null;
 		client = getEC2Client(id, secret, location);
 		boolean found = true;
