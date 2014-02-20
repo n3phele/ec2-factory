@@ -60,7 +60,7 @@ public class EncryptedAWSCredentials implements AWSCredentials {
 		try {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.DECRYPT_MODE, spec);
-			return new String(cipher.doFinal(Base64.decode(encrypted)));
+			return new String(cipher.doFinal(org.apache.commons.codec.binary.Base64.decodeBase64(encrypted.getBytes())));
 		} catch (InvalidKeyException e) {
 			log.log(Level.SEVERE, "Decryption error", e);
 			throw new IllegalArgumentException(e);
@@ -89,7 +89,8 @@ public class EncryptedAWSCredentials implements AWSCredentials {
 		try {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.ENCRYPT_MODE, spec);
-			return new String(Base64.encode(cipher.doFinal(str.getBytes("UTF-8"))));
+			byte[] cipherB = cipher.doFinal(str.getBytes("UTF-8"));
+			return new String(org.apache.commons.codec.binary.Base64.encodeBase64(cipherB));
 		} catch (InvalidKeyException e) {
 			log.log(Level.SEVERE, "Decryption error", e);
 			throw new IllegalArgumentException(e);

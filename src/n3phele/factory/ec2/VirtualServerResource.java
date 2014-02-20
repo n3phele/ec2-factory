@@ -1797,21 +1797,22 @@ public class VirtualServerResource {
 	public List<VirtualServer> getByIdempotencyKey(String key) {
 
 		final String keyTrans = key;
-		final List<VirtualServer> result = VirtualServerResource.dao
-				.transact(new Work<List<VirtualServer>>() {
-					@Override
-					public List<VirtualServer> run() {
-						List<VirtualServer> list = new ArrayList<VirtualServer>(
-								VirtualServerResource.dao.itemDaoFactory()
-										.collectionByProperty("idempotencyKey",
-												keyTrans));
-						return list;
-					}
-				});
+	
+		final ArrayList<VirtualServer> daoList = new ArrayList<VirtualServer>(VirtualServerResource.dao.itemDaoFactory().collectionByProperty("idempotencyKey", keyTrans));
+		
+	Work<List<VirtualServer>> work = new Work<List<VirtualServer>>() {
+		
+		@Override
+		public List<VirtualServer> run() {
+			List<VirtualServer> list = new ArrayList<VirtualServer>(daoList);
+			return list;
+		}
+	};
 
-		return result;
-	}
+	final List<VirtualServer> result = VirtualServerResource.dao.transact(work);
 
+	return result;
+}
 	public List<VirtualServer> getZombie() {
 		List<VirtualServer> list = new ArrayList<VirtualServer>(
 				VirtualServerResource.dao.itemDaoFactory()
