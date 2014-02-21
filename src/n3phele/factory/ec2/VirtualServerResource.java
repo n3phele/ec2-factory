@@ -61,6 +61,7 @@ import n3phele.service.model.core.AbstractManager;
 import n3phele.service.model.core.BaseEntity;
 import n3phele.service.model.core.Collection;
 import n3phele.service.model.core.CreateVirtualServerResponse;
+import n3phele.service.model.core.ExecutionFactoryAssimilateRequest;
 import n3phele.service.model.core.ExecutionFactoryCreateRequest;
 import n3phele.service.model.core.GenericModelDao;
 import n3phele.service.model.core.VirtualServerStatus;
@@ -94,6 +95,7 @@ import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeSpotInstanceRequestsRequest;
 import com.amazonaws.services.ec2.model.DescribeSpotInstanceRequestsResult;
+import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.InstanceStateName;
@@ -103,6 +105,7 @@ import com.amazonaws.services.ec2.model.LaunchSpecification;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.RequestSpotInstancesRequest;
 import com.amazonaws.services.ec2.model.RequestSpotInstancesResult;
+import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
@@ -177,9 +180,11 @@ public class VirtualServerResource {
 	@RolesAllowed("authenticated")
 	@Path("virtualServer/accountTest")
 	public String accountTest(
-			@DefaultValue("false") @FormParam("fix") Boolean fix,
-			@FormParam("id") String id, @FormParam("secret") String secret,
-			@FormParam("key") String key, @FormParam("location") URI location,
+			@FormParam("fix") @DefaultValue("false") Boolean fix,
+			@FormParam("id") String id, 
+			@FormParam("secret") String secret,
+			@FormParam("key") String key, 
+			@FormParam("location") URI location,
 			@FormParam("email") String email,
 			@FormParam("firstName") String firstName,
 			@FormParam("lastName") String lastName,
@@ -211,7 +216,7 @@ public class VirtualServerResource {
 					+ (fix ? " and could not be created.\n" : "\n");
 		return reply;
 	}
-
+	
 	/**
 	 * Collection of virtual servers managed by the n3phele.resource
 	 * 
@@ -227,7 +232,7 @@ public class VirtualServerResource {
 	@RolesAllowed("authenticated")
 	@Path("virtualServer")
 	public Collection<BaseEntity> list(
-			@DefaultValue("false") @QueryParam("summary") Boolean summary) {
+			@QueryParam("summary") @DefaultValue("false") Boolean summary) {
 
 		log.info("get entered with summary " + summary);
 
@@ -313,6 +318,108 @@ public class VirtualServerResource {
 	}
 
 	/**
+	 * Assimilating a VM is the process of looking for an instance in the Amazon cloud,
+	 * getting it's details and storing it in the factory database if it's not there yet.
+	 * This is used when instances are created from outside of the factory (e.g. using Juju)
+	 * and the factory needs to know about their existence to use them in other operations.
+	 * @param request
+	 * 			information about the instance to be looked up in the cloud
+	 * @return
+	 * 			response code informing success or failure in the search and assimilation
+	 */
+	@POST
+	@Produces("application/json")
+	@RolesAllowed("authenticated")
+	@Path("virtualServer/assimilate")
+	public Response assimilate(ExecutionFactoryAssimilateRequest request)
+	{
+		final String TAG = "Assimilate VM: ";
+		
+		logger.info(TAG + "EC2 Assimilating VM Begin");
+		logger.info(TAG + "Looking for IP " + request.ipaddress + " on " + request.location);
+		
+		// Search for instance with the following ip address
+		Filter ipFilter = new Filter();
+		ipFilter.setName("ip-address");
+		ipFilter.withValues(request.ipaddress);
+		
+		// This request searches in running instances for one instance that mathes the filters
+		DescribeInstancesRequest amazonRequest = new DescribeInstancesRequest();
+		amazonRequest.withFilters(ipFilter);
+		
+		// Authenticate an Amazon connection
+		AmazonEC2Client amazonClient = getEC2Client(request.accessKey, request.encryptedSecret, request.location);
+
+		// Execute request
+		DescribeInstancesResult amazonResponse = amazonClient.describeInstances(amazonRequest);
+		
+		// Reservations are "sessions" that start a list of instances
+		if (amazonResponse.getReservations().size() == 0) {
+			logger.warning(TAG + "IP not found on Amazon cloud");
+			return Response.status(Response.Status.NOT_FOUND).build();
+		}
+		logger.info(TAG + "IP found on Amazon cloud, looking for instance id on Amazon factory");
+		
+		// We're expecting one instance with the requested IP, getting index 0 should cover this
+		Reservation foundReservation = amazonResponse.getReservations().get(0);
+		List<Instance> reservationInstances = foundReservation.getInstances();
+		Instance foundInstance = reservationInstances.get(0);
+		String instanceId = foundInstance.getInstanceId();
+
+		List<VirtualServer> listVS = getByInstanceId(instanceId);
+		if (listVS.size() > 0) {
+			logger.warning(TAG + "Instance already exists on Amazon factory");
+			return Response.status(Response.Status.CONFLICT).build();
+		}
+		logger.info(TAG + "Instance not found on Amazon factory, adding VM to factory");
+		
+		// Required data for VM creation below
+		ArrayList<NameValue> paramsVM = new ArrayList<NameValue>();
+		
+		NameValue paramLocation = new NameValue();
+		NameValue paramFlavor = new NameValue();
+		
+		paramLocation.setKey("locationId");
+		paramLocation.setValue(request.locationId);		
+		paramsVM.add(paramLocation);	
+		
+		paramFlavor.setKey("instanceType");
+		paramFlavor.setValue(foundInstance.getInstanceType());
+		paramsVM.add(paramFlavor);
+		
+		// Instance name is in tag key "Name", assuming first tag is the name
+		List<Tag> instanceTags = foundInstance.getTags();
+		Tag tagName = instanceTags.get(0);
+		String instanceName = tagName.getValue();
+		
+		VirtualServer virtualServer = new VirtualServer(instanceName, request.description, request.location, paramsVM, request.notification, request.accessKey, request.encryptedSecret, request.owner, request.idempotencyKey);
+		virtualServer.setCreated(foundInstance.getLaunchTime());
+		virtualServer.setInstanceId(instanceId);
+		
+		add(virtualServer);
+
+		logger.info(TAG + "Succesfully added VM to factory");
+		
+		List<URI> virtualMachinesRefs = new ArrayList<URI>(1);
+		virtualMachinesRefs.add(virtualServer.getUri());
+		return Response.created(virtualServer.getUri()).entity(new CreateVirtualServerResponse(virtualMachinesRefs)).build();
+	}
+
+	/**
+	 * Get a list of Virtual Servers using a instance id
+	 * @param instanceId
+	 * 			instance id to look for
+	 * @return
+	 * 			list of instances with informed instance id
+	 */
+	public List<VirtualServer> getByInstanceId(String instanceId)
+	{
+		logger.info("Getting Virtual Server list by instanceId");
+		
+		return new ArrayList<VirtualServer>(VirtualServerResource.dao.itemDaoFactory().collectionByProperty("instanceId", instanceId));
+	}
+	
+	/**
 	 * Get details of a specific virtual server. This operation does a deep get,
 	 * getting information from the cloud before issuing a reply.
 	 * 
@@ -322,8 +429,7 @@ public class VirtualServerResource {
 	 * @throws NotFoundException
 	 */
 	@GET
-	@Produces({ "application/json",
-			"application/vnd.com.n3phele.VirtualServer+json" })
+	@Produces({ "application/json", "application/vnd.com.n3phele.VirtualServer+json" })
 	@Path("virtualServer/{id}")
 	@RolesAllowed("authenticated")
 	public VirtualServer get(@PathParam("id") Long id) throws NotFoundException {
@@ -343,7 +449,8 @@ public class VirtualServerResource {
 	@DELETE
 	@Path("virtualServer/{id}")
 	@RolesAllowed("authenticated")
-	public void kill(@PathParam("id") Long id,
+	public void kill(
+			@PathParam("id") Long id,
 			@DefaultValue("false") @QueryParam("debug") boolean debug,
 			@DefaultValue("false") @QueryParam("error") boolean error)
 			throws NotFoundException {
