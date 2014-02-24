@@ -12,7 +12,6 @@
 	<classpathentry kind="lib" path="war/WEB-INF/lib/objectify-4.0rc2.jar"/>
 	<classpathentry kind="lib" path="war/WEB-INF/lib/gae-aws-sdk-1.1.7.1.6.0.jar"/>
 	<classpathentry kind="lib" path="war/WEB-INF/lib/n3phele.jar"/>
-	<classpathentry kind="con" path="com.google.appengine.eclipse.core.GAE_CONTAINER/appengine-java-sdk-1.7.5"/>
 	<classpathentry kind="lib" path="C:/Users/lis/Desktop/n3phele-eclipse-env/Dependencies/gwt-2.5.1/gwt-user.jar">
 		<attributes>
 			<attribute name="javadoc_location" value="file:/C:/Users/lis/Desktop/n3phele-eclipse-env/Dependencies/gwt-2.5.1/doc/javadoc/"/>
@@ -32,5 +31,6 @@
 	<classpathentry kind="lib" path="war/WEB-INF/lib/mockito-all-1.9.5.jar"/>
 	<classpathentry kind="lib" path="war/WEB-INF/lib/powermock-mockito-1.5-full.jar"/>
 	<classpathentry kind="lib" path="war/WEB-INF/lib/rome-1.0.jar"/>
+	<classpathentry kind="con" path="com.google.appengine.eclipse.core.GAE_CONTAINER/appengine-java-sdk-1.8.9"/>
 	<classpathentry kind="output" path="war/WEB-INF/classes"/>
 </classpath>

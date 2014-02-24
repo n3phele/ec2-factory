@@ -389,9 +389,15 @@ public class VirtualServerResource {
 		
 		// Instance name is in tag key "Name", assuming first tag is the name
 		List<Tag> instanceTags = foundInstance.getTags();
-		Tag tagName = instanceTags.get(0);
-		String instanceName = tagName.getValue();
-		
+		String instanceName = null; 
+		if (instanceTags.size() == 0) {
+			instanceName = instanceId;
+		}
+		else {
+			Tag tagName = instanceTags.get(0);
+			instanceName = tagName.getValue();
+		}
+				
 		VirtualServer virtualServer = new VirtualServer(instanceName, request.description, request.location, paramsVM, request.notification, request.accessKey, request.encryptedSecret, request.owner, request.idempotencyKey);
 		virtualServer.setCreated(foundInstance.getLaunchTime());
 		virtualServer.setInstanceId(instanceId);
