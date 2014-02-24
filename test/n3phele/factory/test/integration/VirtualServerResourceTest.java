@@ -106,7 +106,7 @@ public class VirtualServerResourceTest {
 		request.name = "vm_name";
 		request.owner = new URI("http://localhost/");
 		// Change idempotencyKey, must be unique value
-		request.idempotencyKey = "idempotency-key1";
+		request.idempotencyKey = "create-idempotency-key0";
 		ArrayList<NameValue> parameters = new ArrayList<NameValue>();
 		parameters.add(new NameValue("nodeCount", "1"));
 		parameters.add(new NameValue("imageId", "ami-bba18dd2"));
@@ -136,12 +136,12 @@ public class VirtualServerResourceTest {
 		request.description = "description";
 		request.name = "";
 		// Change idempotencyKey, must be unique value
-		request.idempotencyKey = "idempotency-key1";
+		request.idempotencyKey = "assimilate-idempotency-key0";
 		request.owner = new URI("http://localhost/");
 		request.locationId = "ec2.amazonaws.com";
 		
 		// Fill with public IP of existing amazon instance
-		request.ipaddress = "54.242.225.251";
+		request.ipaddress = "23.22.196.11";
 
 		ClientResponse result = resource.post(ClientResponse.class, request);
 		assertEquals(201, result.getStatus());
